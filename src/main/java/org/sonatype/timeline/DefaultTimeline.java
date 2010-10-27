@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.codehaus.plexus.component.annotations.Component;
 import org.codehaus.plexus.component.annotations.Requirement;
@@ -28,7 +29,7 @@ public class DefaultTimeline
 {
     @Requirement
     private Logger logger;
-    
+
     @Requirement
     private TimelinePersistor persistor;
 
@@ -36,13 +37,21 @@ public class DefaultTimeline
     private TimelineIndexer indexer;
 
     private TimelineConfiguration configuration;
-    
+
+    private ReentrantLock repairLock = new ReentrantLock();
+
     protected Logger getLogger()
     {
         return logger;
     }
 
-    public void configure( TimelineConfiguration config )
+    protected boolean isIndexerHealthy()
+    {
+        // we have no ongoing repair and indexer is started
+        return ( !repairLock.isLocked() ) && indexer.isStarted();
+    }
+
+    public synchronized void configure( TimelineConfiguration config )
         throws TimelineException
     {
         this.configuration = config;
@@ -55,35 +64,68 @@ public class DefaultTimeline
         }
         catch ( TimelineException e )
         {
-            getLogger().info( "Failed to configure timeline index, trying to repair it." );
-
-            if ( getLogger().isDebugEnabled() )
-            {
-                getLogger().debug( "Cause:", e );
-            }
-
-            repairTimelineIndexer();
-
-            getLogger().info( "Timeline index is repaired." );
+            repairTimelineIndexer( e );
         }
     }
 
-    private void repairTimelineIndexer()
+    private void repairTimelineIndexer( Exception e )
         throws TimelineException
     {
-        try
+        if ( repairLock.tryLock() )
         {
-            FileUtils.cleanDirectory( configuration.getIndexDirectory() );
-        }
-        catch ( IOException e )
-        {
-            throw new TimelineException( "Failed to clean index directory: "
-                + configuration.getIndexDirectory().getAbsolutePath(), e );
-        }
+            try
+            {
+                getLogger().info( "Timeline index got corrupted, trying to repair it.", e );
 
-        indexer.configure( configuration );
+                indexer.stop();
 
-        indexer.addAll( persistor.readAll() );
+                try
+                {
+                    FileUtils.cleanDirectory( configuration.getIndexDirectory() );
+                }
+                catch ( IOException ex )
+                {
+                    throw new TimelineException( "Failed to clean index and repair timeline, directory: "
+                        + configuration.getIndexDirectory().getAbsolutePath(), ex );
+                }
+
+                try
+                {
+                    indexer.configure( configuration );
+
+                    indexer.addAll( persistor.readAllSinceDays( configuration.getRepairDaysCountRestored() ) );
+
+                    if ( indexer.isStarted() )
+                    {
+                        getLogger().info(
+                            "Timeline index is succesfully repaired, the last "
+                                + configuration.getRepairDaysCountRestored() + " days were restored." );
+                    }
+                    else
+                    {
+                        getLogger().warn( "Timeline index was corrupted and repair of it failed!" );
+                    }
+                }
+                catch ( Exception ex )
+                {
+                    // we need to stop it
+                    indexer.stop();
+
+                    if ( ex instanceof TimelineException )
+                    {
+                        throw (TimelineException) ex;
+                    }
+                    else
+                    {
+                        throw new TimelineException( "Unable to repair the Timeline indexer!", ex );
+                    }
+                }
+            }
+            finally
+            {
+                repairLock.unlock();
+            }
+        }
     }
 
     public void add( long timestamp, String type, String subType, Map<String, String> data )
@@ -94,25 +136,19 @@ public class DefaultTimeline
         {
             persistor.persist( record );
 
-            try
+            if ( isIndexerHealthy() )
             {
-                indexer.add( record );
-            }
-            catch ( TimelineException e )
-            {
-                getLogger().info( "Failed to write to timeline index, trying to repair it." );
-
-                if ( getLogger().isDebugEnabled() )
+                try
                 {
-                    getLogger().debug( "Cause:", e );
+                    indexer.add( record );
                 }
+                catch ( TimelineException e )
+                {
+                    repairTimelineIndexer( e );
 
-                repairTimelineIndexer();
-
-                getLogger().info( "Timeline index is repaired." );
-
-                // now try add again
-                indexer.add( record );
+                    // now try add again
+                    indexer.add( record );
+                }
             }
         }
         catch ( TimelineException e )
@@ -143,25 +179,23 @@ public class DefaultTimeline
     {
         try
         {
-            try
+            if ( isIndexerHealthy() )
             {
-                return indexer.purge( fromTime, toTime, types, subTypes );
-            }
-            catch ( TimelineException e )
-            {
-                getLogger().info( "Failed to purge timeline index, trying to repair it." );
-
-                if ( getLogger().isDebugEnabled() )
+                try
                 {
-                    getLogger().debug( "Cause:", e );
+                    return indexer.purge( fromTime, toTime, types, subTypes );
                 }
+                catch ( TimelineException e )
+                {
+                    repairTimelineIndexer( e );
 
-                repairTimelineIndexer();
-
-                getLogger().info( "Timeline index is repaired." );
-
-                // now try purge again
-                return indexer.purge( fromTime, toTime, types, subTypes );
+                    // now try purge again
+                    return indexer.purge( fromTime, toTime, types, subTypes );
+                }
+            }
+            else
+            {
+                return 0;
             }
         }
         catch ( TimelineException e )
@@ -235,25 +269,23 @@ public class DefaultTimeline
     {
         try
         {
-            try
+            if ( isIndexerHealthy() )
             {
-                return indexer.retrieve( fromTime, toTime, types, subTypes, from, count, filter );
-            }
-            catch ( TimelineException e )
-            {
-                getLogger().info( "Failed to retrieve from timeline index, trying to repair it." );
-
-                if ( getLogger().isDebugEnabled() )
+                try
                 {
-                    getLogger().debug( "Cause:", e );
+                    return indexer.retrieve( fromTime, toTime, types, subTypes, from, count, filter );
                 }
+                catch ( TimelineException e )
+                {
+                    repairTimelineIndexer( e );
 
-                repairTimelineIndexer();
-
-                getLogger().info( "Timeline index is repaired." );
-
-                // now try retrieve again
-                return indexer.retrieve( fromTime, toTime, types, subTypes, from, count, filter );
+                    // now try retrieve again
+                    return indexer.retrieve( fromTime, toTime, types, subTypes, from, count, filter );
+                }
+            }
+            else
+            {
+                return TimelineResult.EMPTY_RESULT;
             }
         }
         catch ( TimelineException e )

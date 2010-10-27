@@ -22,13 +22,23 @@ public class TimelineConfiguration
 
     private int persistRollingInterval;
 
-    public TimelineConfiguration( File persistDirectory, File indexDirectory, int persistRollingInterval )
+    private int repairDaysCountRestored;
+
+    public TimelineConfiguration( File persistDirectory, File indexDirectory, int persistRollingInterval,
+                                  int repairDaysCountRestored )
     {
         this.persistDirectory = persistDirectory;
 
         this.indexDirectory = indexDirectory;
 
         this.persistRollingInterval = persistRollingInterval;
+
+        this.repairDaysCountRestored = repairDaysCountRestored;
+    }
+
+    public TimelineConfiguration( File persistDirectory, File indexDirectory, int persistRollingInterval )
+    {
+        this( persistDirectory, indexDirectory, persistRollingInterval, Timeline.DEFAULT_REPAIR_DAYS_TO_RESTORE );
     }
 
     public TimelineConfiguration( File persistDirectory, File indexDirectory )
@@ -71,4 +81,13 @@ public class TimelineConfiguration
         this.persistRollingInterval = persistRollingInterval;
     }
 
+    public int getRepairDaysCountRestored()
+    {
+        return repairDaysCountRestored;
+    }
+
+    public void setRepairDaysCountRestored( int repairDaysCountRestored )
+    {
+        this.repairDaysCountRestored = repairDaysCountRestored;
+    }
 }

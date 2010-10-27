@@ -26,6 +26,11 @@ import java.util.Set;
 public interface Timeline
 {
     /**
+     * The default count of days to restore on repairs.
+     */
+    public static final int DEFAULT_REPAIR_DAYS_TO_RESTORE = 30;
+
+    /**
      * Configures Timeline. It has to be invoked before 1st use.
      * 
      * @param config

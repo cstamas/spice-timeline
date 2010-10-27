@@ -16,12 +16,42 @@ import java.util.Set;
 
 public interface TimelineIndexer
 {
+    /**
+     * Configures and starts Indexer. Mandatory to call it before any invocation.
+     * 
+     * @param config
+     * @throws TimelineException
+     */
     void configure( TimelineConfiguration config )
         throws TimelineException;
 
+    /**
+     * Stops the Indexer.
+     */
+    void stop();
+
+    /**
+     * Returns true if Indexer is started.
+     * 
+     * @return
+     */
+    boolean isStarted();
+
+    /**
+     * Adds one record to timeline.
+     * 
+     * @param record
+     * @throws TimelineException
+     */
     void add( TimelineRecord record )
         throws TimelineException;
 
+    /**
+     * Adds multiple records to timeline.
+     * 
+     * @param records
+     * @throws TimelineException
+     */
     void addAll( TimelineResult records )
         throws TimelineException;
 
