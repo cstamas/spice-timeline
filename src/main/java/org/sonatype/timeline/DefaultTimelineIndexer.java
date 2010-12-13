@@ -15,7 +15,6 @@ package org.sonatype.timeline;
 import java.io.IOException;
 import java.text.ParseException;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
@@ -26,6 +25,7 @@ import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.Fieldable;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriter.MaxFieldLength;
@@ -33,15 +33,16 @@ import org.apache.lucene.index.SerialMergeScheduler;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.ConstantScoreRangeQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.TopFieldDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.apache.lucene.util.Version;
 import org.codehaus.plexus.component.annotations.Component;
 import org.codehaus.plexus.component.annotations.Requirement;
 import org.codehaus.plexus.logging.Logger;
@@ -95,7 +96,7 @@ public class DefaultTimelineIndexer
                 directory.close();
             }
 
-            directory = FSDirectory.getDirectory( configuration.getIndexDirectory() );
+            directory = FSDirectory.open( configuration.getIndexDirectory() );
 
             if ( IndexReader.indexExists( directory ) )
             {
@@ -107,13 +108,15 @@ public class DefaultTimelineIndexer
                 newIndex = false;
             }
 
-            indexWriter = new IndexWriter( directory, new StandardAnalyzer(), newIndex, MaxFieldLength.LIMITED );
+            indexWriter =
+                new IndexWriter( directory, new StandardAnalyzer( Version.LUCENE_30 ), newIndex, MaxFieldLength.LIMITED );
 
             indexWriter.setMergeScheduler( new SerialMergeScheduler() );
 
             closeIndexWriter();
-            
-            indexWriter = new IndexWriter( directory, new StandardAnalyzer(), false, MaxFieldLength.LIMITED );
+
+            indexWriter =
+                new IndexWriter( directory, new StandardAnalyzer( Version.LUCENE_30 ), false, MaxFieldLength.LIMITED );
 
             indexWriter.setRAMBufferSizeMB( 2 );
 
@@ -391,15 +394,16 @@ public class DefaultTimelineIndexer
     {
         if ( isEmptySet( types ) && isEmptySet( subTypes ) )
         {
-            return new ConstantScoreRangeQuery( TIMESTAMP, DateTools.timeToString( from, TIMELINE_RESOLUTION ),
+            return new TermRangeQuery( TIMESTAMP, DateTools.timeToString( from, TIMELINE_RESOLUTION ),
                 DateTools.timeToString( to, TIMELINE_RESOLUTION ), true, true );
         }
         else
         {
             BooleanQuery result = new BooleanQuery();
 
-            result.add( new ConstantScoreRangeQuery( TIMESTAMP, DateTools.timeToString( from, TIMELINE_RESOLUTION ),
-                DateTools.timeToString( to, TIMELINE_RESOLUTION ), true, true ), Occur.MUST );
+            result.add(
+                new TermRangeQuery( TIMESTAMP, DateTools.timeToString( from, TIMELINE_RESOLUTION ),
+                    DateTools.timeToString( to, TIMELINE_RESOLUTION ), true, true ), Occur.MUST );
 
             if ( !isEmptySet( types ) )
             {
@@ -526,7 +530,6 @@ public class DefaultTimelineIndexer
             }
         }
 
-        @SuppressWarnings( "unchecked" )
         protected TimelineRecord buildData( Document doc )
         {
             long timestamp = -1;
@@ -556,7 +559,7 @@ public class DefaultTimelineIndexer
 
             TimelineRecord result = new TimelineRecord( timestamp, type, subType, data );
 
-            for ( Field field : (List<Field>) doc.getFields() )
+            for ( Fieldable field : doc.getFields() )
             {
                 if ( !field.name().startsWith( "_" ) )
                 {

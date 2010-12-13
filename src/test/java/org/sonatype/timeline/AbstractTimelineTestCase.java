@@ -41,6 +41,13 @@ public abstract class AbstractTimelineTestCase
         indexer = this.lookup( TimelineIndexer.class );
     }
 
+    public void tearDown()
+        throws Exception
+    {
+        timeline.stop();
+        super.tearDown();
+    }
+
     protected void cleanDirectory( File directory )
         throws Exception
     {
@@ -80,7 +87,7 @@ public abstract class AbstractTimelineTestCase
         {
             records.add( rec );
         }
-        
+
         result.release();
 
         return records;

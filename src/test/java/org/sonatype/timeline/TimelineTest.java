@@ -60,7 +60,7 @@ public class TimelineTest
 
         Set<String> types = new HashSet<String>();
         types.add( "typeA" );
-        List<TimelineRecord> results = asList( timeline.retrieveNewest( 10, types ) );
+        List<TimelineRecord> results = asList( timeline.retrieve( 0, 10, types, null, null ) );
 
         assertEquals( 1, results.size() );
         assertEquals( data, results.get( 0 ).getData() );
@@ -80,11 +80,11 @@ public class TimelineTest
         timeline.add( 3000000L, type, null, data );
         timeline.add( 4000000L, type, null, data );
 
-        assertEquals( 4, sizeOf( timeline.retrieve( 0, 10, null ) ) );
+        assertEquals( 4, sizeOf( timeline.retrieve( 0, 10, null, null, null ) ) );
         assertEquals( 3, timeline.purgeOlderThan( 3500000L ) );
-        assertEquals( 1, sizeOf( timeline.retrieve( 0, 10, null ) ) );
+        assertEquals( 1, sizeOf( timeline.retrieve( 0, 10, null, null, null ) ) );
         assertEquals( 1, timeline.purgeAll() );
-        assertEquals( 0, sizeOf( timeline.retrieve( 0, 10, null ) ) );
+        assertEquals( 0, sizeOf( timeline.retrieve( 0, 10, null, null, null ) ) );
     }
 
     public void testRepairIndexCouldNotRead()

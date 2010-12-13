@@ -40,6 +40,8 @@ public class DefaultTimeline
 
     private ReentrantLock repairLock = new ReentrantLock();
 
+    private volatile boolean started = false;
+
     protected Logger getLogger()
     {
         return logger;
@@ -66,6 +68,15 @@ public class DefaultTimeline
         {
             repairTimelineIndexer( e );
         }
+
+        this.started = true;
+    }
+
+    public void stop()
+    {
+        indexer.stop();
+
+        this.started = false;
     }
 
     private void repairTimelineIndexer( Exception e )
@@ -130,6 +141,11 @@ public class DefaultTimeline
 
     public void add( long timestamp, String type, String subType, Map<String, String> data )
     {
+        if ( !started )
+        {
+            return;
+        }
+
         TimelineRecord record = new TimelineRecord( timestamp, type, subType, data );
 
         try
@@ -267,6 +283,11 @@ public class DefaultTimeline
     private TimelineResult retrieve( long fromTime, long toTime, Set<String> types, Set<String> subTypes, int from,
                                      int count, TimelineFilter filter )
     {
+        if ( !started )
+        {
+            return TimelineResult.EMPTY_RESULT;
+        }
+
         try
         {
             if ( isIndexerHealthy() )

@@ -39,6 +39,11 @@ public interface Timeline
         throws TimelineException;
 
     /**
+     * Stops timeline. All calls made against it will actually do nothing.
+     */
+    void stop();
+
+    /**
      * Adds a record to the timeline with "now" timestamp (System.currentTimeMillis()).
      * 
      * @param type the record type.
